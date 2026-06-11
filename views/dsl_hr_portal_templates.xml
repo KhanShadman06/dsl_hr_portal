@@ -149,7 +149,7 @@
                 </div>
                 <div class="dsl-shift-chip">
                     <i class="fa fa-map-marker"/>
-                    <t t-if="open_attendance">Clocked in</t>
+                    <t t-if="open_attendance">Checked in</t>
                     <t t-else="">Ready</t>
                 </div>
             </section>
@@ -259,11 +259,11 @@
                 <div class="dsl-button-row">
                     <button class="dsl-primary-btn" type="button" data-dsl-punch="clock_in" t-att-disabled="'disabled' if open_attendance else None">
                         <i class="fa fa-play"/>
-                        <span>Clock In</span>
+                        <span>Check In</span>
                     </button>
                     <button class="dsl-secondary-btn" type="button" data-dsl-punch="clock_out" t-att-disabled="None if open_attendance else 'disabled'">
                         <i class="fa fa-stop"/>
-                        <span>Clock Out</span>
+                        <span>Check Out</span>
                     </button>
                 </div>
             </section>
@@ -304,8 +304,8 @@
                     <table class="dsl-table">
                         <thead>
                             <tr>
-                                <th>Clock In</th>
-                                <th>Clock Out</th>
+                                <th>Check In</th>
+                                <th>Check Out</th>
                             </tr>
                         </thead>
                         <tbody>

@@ -201,7 +201,7 @@ class DslHrPortal(CustomerPortal):
             }
             vals.update(self._attendance_location_values(Attendance, "in", latitude, longitude))
             Attendance.create(vals)
-            return self._json_response({"ok": True, "message": "Clock in recorded."})
+            return self._json_response({"ok": True, "message": "Check in recorded."})
 
         if action == "clock_out":
             if not open_attendance:
@@ -211,7 +211,7 @@ class DslHrPortal(CustomerPortal):
             vals = {"check_out": now}
             vals.update(self._attendance_location_values(Attendance, "out", latitude, longitude))
             open_attendance.write(vals)
-            return self._json_response({"ok": True, "message": "Clock out recorded."})
+            return self._json_response({"ok": True, "message": "Check out recorded."})
 
         return self._json_response({"ok": False, "message": "Invalid attendance action."}, 400)
 
