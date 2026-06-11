@@ -2,16 +2,20 @@
 
 import base64
 import json
-from datetime import datetime
+from datetime import datetime, time
 
 import pytz
 
 from odoo import fields, http
+from odoo.exceptions import ValidationError
 from odoo.addons.portal.controllers.portal import CustomerPortal
 from odoo.http import request
 
 
 class DslHrPortal(CustomerPortal):
+    def _is_hr_user(self):
+        return request.env.user.has_group("hr.group_hr_user")
+
     def _get_employee_record(self):
         Employee = request.env["hr.employee"].sudo()
         user = request.env.user
@@ -40,16 +44,80 @@ class DslHrPortal(CustomerPortal):
             return request.redirect("/dsl/no-employee")
         return employee
 
+    def _employee_domain(self):
+        Employee = request.env["hr.employee"].sudo()
+        domain = []
+        if "active" in Employee._fields:
+            domain.append(("active", "=", True))
+        return domain
+
+    def _active_employees(self):
+        return request.env["hr.employee"].sudo().search(self._employee_domain(), order="name asc")
+
+    def _visible_employees(self, employee, include_self=True):
+        if not employee:
+            return request.env["hr.employee"].sudo().browse()
+        if "dsl_manager_user_ids" not in request.env["hr.employee"]._fields:
+            return employee.sudo()
+        return employee._dsl_get_hierarchy_employees(include_self=include_self)
+
+    def _overview_employees(self, employee):
+        if self._is_hr_user():
+            return self._active_employees()
+        if employee:
+            return self._visible_employees(employee, include_self=False)
+        return request.env["hr.employee"].sudo().browse()
+
     def _base_values(self, page_name, employee=None):
-        employee = employee or self._get_employee_record()
+        if employee is None:
+            employee = self._get_employee_record()
         team_employees = self._visible_employees(employee, include_self=False) if employee else employee
+        is_hr_user = self._is_hr_user()
         return {
             "page_name": page_name,
             "employee": employee,
             "employee_name": employee.name if employee else request.env.user.name,
+            "has_employee": bool(employee),
             "has_team": bool(team_employees),
             "team_count": len(team_employees) if team_employees else 0,
+            "is_hr_user": is_hr_user,
+            "has_attendance_overview": is_hr_user or bool(team_employees),
         }
+
+    def _today_bounds(self):
+        today = fields.Date.context_today(request.env.user)
+        tz = pytz.timezone(request.env.user.tz or "UTC")
+        start = tz.localize(datetime.combine(today, time.min)).astimezone(pytz.UTC).replace(tzinfo=None)
+        end = tz.localize(datetime.combine(today, time.max)).astimezone(pytz.UTC).replace(tzinfo=None)
+        return today, start, end
+
+    def _company_day_records(self, date_from=None, date_to=None, company_ids=None, limit=None):
+        CompanyDay = request.env["dsl.hr.company.day"].sudo()
+        domain = [("active", "=", True)]
+        if date_from and date_to:
+            domain += [("date_from", "<=", date_to), ("date_to", ">=", date_from)]
+        elif date_from:
+            domain.append(("date_to", ">=", date_from))
+
+        if company_ids is not None:
+            company_ids = [company_id for company_id in company_ids if company_id]
+            if company_ids:
+                domain += ["|", ("company_id", "=", False), ("company_id", "in", company_ids)]
+            else:
+                domain.append(("company_id", "=", False))
+
+        return CompanyDay.search(domain, limit=limit, order="date_from asc, name asc")
+
+    def _upcoming_company_days(self, employees=None, employee=None, limit=8):
+        today = fields.Date.context_today(request.env.user)
+        company_ids = []
+        if employees:
+            company_ids = employees.mapped("company_id").ids
+        elif employee and employee.company_id:
+            company_ids = employee.company_id.ids
+        elif request.env.company:
+            company_ids = request.env.company.ids
+        return self._company_day_records(date_from=today, company_ids=company_ids, limit=limit)
 
     def _parse_local_datetime(self, date_value, time_value):
         local_date = fields.Date.from_string(date_value)
@@ -90,6 +158,11 @@ class DslHrPortal(CustomerPortal):
         )
 
     def _attendance_values(self, employee):
+        if not employee:
+            return {
+                "open_attendance": request.env["hr.attendance"].sudo().browse(),
+                "attendance_records": request.env["hr.attendance"].sudo().browse(),
+            }
         Attendance = request.env["hr.attendance"].sudo()
         open_attendance = self._get_open_attendance(employee)
         records = Attendance.search(
@@ -102,26 +175,152 @@ class DslHrPortal(CustomerPortal):
             "attendance_records": records,
         }
 
+    def _attendance_overview(self, employees):
+        employees = employees.sudo() if employees else request.env["hr.employee"].sudo().browse()
+        empty = {
+            "date": fields.Date.context_today(request.env.user),
+            "total_count": 0,
+            "present_count": 0,
+            "checked_out_count": 0,
+            "attended_count": 0,
+            "leave_count": 0,
+            "holiday_count": 0,
+            "absent_count": 0,
+            "present_rows": [],
+            "checked_out_rows": [],
+            "leave_rows": [],
+            "holiday_rows": [],
+            "absent_rows": [],
+            "overview_rows": [],
+            "company_days": request.env["dsl.hr.company.day"].sudo().browse(),
+        }
+        if not employees:
+            return empty
+
+        today, start, end = self._today_bounds()
+        Attendance = request.env["hr.attendance"].sudo()
+        attendances = Attendance.search(
+            [
+                ("employee_id", "in", employees.ids),
+                ("check_in", "<=", end),
+                "|",
+                ("check_out", "=", False),
+                ("check_out", ">=", start),
+            ],
+            order="check_in desc",
+        )
+        open_ids = set()
+        attended_ids = set()
+        last_attendance = {}
+        for attendance in attendances:
+            employee_id = attendance.employee_id.id
+            attended_ids.add(employee_id)
+            last_attendance.setdefault(employee_id, attendance)
+            if not attendance.check_out:
+                open_ids.add(employee_id)
+
+        Leave = request.env["dsl.hr.leave.request"].sudo()
+        approved_leaves = Leave.search(
+            [
+                ("employee_id", "in", employees.ids),
+                ("state", "=", "approved"),
+                ("date_from", "<=", today),
+                ("date_to", ">=", today),
+            ],
+            order="date_from asc",
+        )
+        leave_by_employee = {leave.employee_id.id: leave for leave in approved_leaves}
+
+        company_days = self._company_day_records(
+            date_from=today,
+            date_to=today,
+            company_ids=employees.mapped("company_id").ids,
+        ).filtered(lambda day: day.day_type == "holiday")
+        global_days = company_days.filtered(lambda day: not day.company_id)
+        days_by_company = {}
+        for day in company_days.filtered(lambda day: day.company_id):
+            days_by_company[day.company_id.id] = days_by_company.get(
+                day.company_id.id, request.env["dsl.hr.company.day"].sudo().browse()
+            ) | day
+
+        buckets = {
+            "present": [],
+            "checked_out": [],
+            "leave": [],
+            "holiday": [],
+            "absent": [],
+        }
+        overview_rows = []
+        for employee in employees.sorted(lambda item: item.name or ""):
+            employee_days = global_days | days_by_company.get(
+                employee.company_id.id, request.env["dsl.hr.company.day"].sudo().browse()
+            )
+            row = {
+                "employee": employee,
+                "department": employee.department_id.name if employee.department_id else "",
+                "job_title": employee.job_id.name if employee.job_id else "",
+                "attendance": last_attendance.get(employee.id),
+                "leave": leave_by_employee.get(employee.id),
+                "company_days": employee_days,
+            }
+            if employee.id in open_ids:
+                row.update({"status": "present", "status_label": "Present Now", "status_class": "present"})
+                buckets["present"].append(row)
+            elif employee.id in leave_by_employee:
+                row.update({"status": "on_leave", "status_label": "On Leave", "status_class": "leave"})
+                buckets["leave"].append(row)
+            elif employee_days:
+                row.update({"status": "holiday", "status_label": "Holiday", "status_class": "holiday"})
+                buckets["holiday"].append(row)
+            elif employee.id in attended_ids:
+                row.update({"status": "checked_out", "status_label": "Checked Out", "status_class": "checked-out"})
+                buckets["checked_out"].append(row)
+            else:
+                row.update({"status": "absent", "status_label": "Absent", "status_class": "absent"})
+                buckets["absent"].append(row)
+            overview_rows.append(row)
+
+        return {
+            "date": today,
+            "total_count": len(employees),
+            "present_count": len(buckets["present"]),
+            "checked_out_count": len(buckets["checked_out"]),
+            "attended_count": len(buckets["present"]) + len(buckets["checked_out"]),
+            "leave_count": len(buckets["leave"]),
+            "holiday_count": len(buckets["holiday"]),
+            "absent_count": len(buckets["absent"]),
+            "present_rows": buckets["present"],
+            "checked_out_rows": buckets["checked_out"],
+            "leave_rows": buckets["leave"],
+            "holiday_rows": buckets["holiday"],
+            "absent_rows": buckets["absent"],
+            "overview_rows": overview_rows,
+            "company_days": company_days,
+        }
+
     def _request_records(self, model_name, employee, limit=20):
+        if not employee:
+            return request.env[model_name].sudo().browse()
         return request.env[model_name].sudo().search(
             [("employee_id", "=", employee.id)],
             limit=limit,
             order="submitted_on desc, id desc",
         )
 
-    def _visible_employees(self, employee, include_self=True):
-        if "dsl_manager_user_ids" not in request.env["hr.employee"]._fields:
-            return employee.sudo()
-        return employee._dsl_get_hierarchy_employees(include_self=include_self)
-
-    def _team_request_records(self, model_name, employees, limit=20):
+    def _team_request_records(self, model_name, employees, limit=20, pending_only=False):
         if not employees:
             return request.env[model_name].sudo().browse()
+        domain = [("employee_id", "in", employees.ids)]
+        if pending_only:
+            domain.append(("state", "in", ["draft", "submitted", "under_review"]))
         return request.env[model_name].sudo().search(
-            [("employee_id", "in", employees.ids)],
+            domain,
             limit=limit,
             order="submitted_on desc, id desc",
         )
+
+    def _overview_label(self):
+        return "Company" if self._is_hr_user() else "Team"
 
     @http.route("/dsl/login", type="http", auth="public", website=True)
     def dsl_login(self, **kw):
@@ -143,16 +342,20 @@ class DslHrPortal(CustomerPortal):
 
     @http.route(["/dsl", "/dsl/dashboard"], type="http", auth="user", website=True)
     def dsl_dashboard(self, **kw):
-        employee = self._require_employee()
-        if not getattr(employee, "id", False):
-            return employee
+        employee = self._get_employee_record()
+        if not employee and not self._is_hr_user():
+            return request.redirect("/dsl/no-employee")
 
         attendance_data = self._attendance_values(employee)
+        overview_employees = self._overview_employees(employee)
+        attendance_overview = self._attendance_overview(overview_employees) if overview_employees else False
         values = self._base_values("dashboard", employee)
         values.update(
             {
                 "open_attendance": attendance_data["open_attendance"],
                 "recent_attendance": attendance_data["attendance_records"][:4],
+                "attendance_overview": attendance_overview,
+                "overview_scope_label": self._overview_label(),
                 "leave_requests": self._request_records("dsl.hr.leave.request", employee, 5),
                 "attendance_requests": self._request_records(
                     "dsl.hr.attendance.request", employee, 5
@@ -161,19 +364,40 @@ class DslHrPortal(CustomerPortal):
                 "settlement_requests": self._request_records(
                     "dsl.hr.settlement.request", employee, 3
                 ),
+                "pending_leave_requests": self._team_request_records(
+                    "dsl.hr.leave.request", overview_employees, 5, pending_only=True
+                ),
+                "pending_attendance_requests": self._team_request_records(
+                    "dsl.hr.attendance.request", overview_employees, 5, pending_only=True
+                ),
+                "pending_support_tickets": self._team_request_records(
+                    "dsl.hr.support.ticket", overview_employees, 5, pending_only=True
+                ),
+                "pending_settlement_requests": self._team_request_records(
+                    "dsl.hr.settlement.request", overview_employees, 5, pending_only=True
+                ),
             }
         )
         return request.render("dsl_hr_portal.dsl_dashboard_page", values)
 
     @http.route("/dsl/attendance", type="http", auth="user", website=True)
     def dsl_attendance(self, **kw):
-        employee = self._require_employee()
-        if not getattr(employee, "id", False):
-            return employee
+        employee = self._get_employee_record()
+        if not employee and not self._is_hr_user():
+            return request.redirect("/dsl/no-employee")
+
+        overview_employees = self._overview_employees(employee)
         values = self._base_values("attendance", employee)
         values.update(self._attendance_values(employee))
-        values["manual_requests"] = self._request_records(
-            "dsl.hr.attendance.request", employee
+        values.update(
+            {
+                "attendance_overview": self._attendance_overview(overview_employees) if overview_employees else False,
+                "overview_scope_label": self._overview_label(),
+                "manual_requests": self._request_records("dsl.hr.attendance.request", employee),
+                "team_attendance_requests": self._team_request_records(
+                    "dsl.hr.attendance.request", overview_employees, 20, pending_only=True
+                ),
+            }
         )
         return request.render("dsl_hr_portal.dsl_attendance_page", values)
 
@@ -210,7 +434,7 @@ class DslHrPortal(CustomerPortal):
         if action == "clock_in":
             if open_attendance:
                 return self._json_response(
-                    {"ok": False, "message": "You are already clocked in."}, 400
+                    {"ok": False, "message": "You are already checked in."}, 400
                 )
             vals = {
                 "employee_id": employee.id,
@@ -266,11 +490,23 @@ class DslHrPortal(CustomerPortal):
 
     @http.route("/dsl/leave", type="http", auth="user", website=True)
     def dsl_leave(self, **kw):
-        employee = self._require_employee()
-        if not getattr(employee, "id", False):
-            return employee
+        employee = self._get_employee_record()
+        if not employee and not self._is_hr_user():
+            return request.redirect("/dsl/no-employee")
+
+        overview_employees = self._overview_employees(employee)
         values = self._base_values("leave", employee)
-        values["leave_requests"] = self._request_records("dsl.hr.leave.request", employee)
+        values.update(
+            {
+                "leave_requests": self._request_records("dsl.hr.leave.request", employee),
+                "team_leave_requests": self._team_request_records(
+                    "dsl.hr.leave.request", overview_employees, 20, pending_only=True
+                ),
+                "company_days": self._upcoming_company_days(overview_employees, employee),
+                "overview_scope_label": self._overview_label(),
+                "leave_error": kw.get("error"),
+            }
+        )
         return request.render("dsl_hr_portal.dsl_leave_page", values)
 
     @http.route(
@@ -305,20 +541,26 @@ class DslHrPortal(CustomerPortal):
                         "res_id": leave.id,
                     }
                 )
+        except ValidationError:
+            return request.redirect("/dsl/leave?error=blocked")
         except Exception:
             return request.redirect("/dsl/leave?error=request")
         return request.redirect("/dsl/leave?submitted=1")
 
     @http.route("/dsl/directory", type="http", auth="user", website=True)
     def dsl_directory(self, q=None, **kw):
-        employee = self._require_employee()
-        if not getattr(employee, "id", False):
-            return employee
-        if not self._visible_employees(employee, include_self=False):
-            return request.redirect("/dsl/dashboard")
+        employee = self._get_employee_record()
+        if not employee and not self._is_hr_user():
+            return request.redirect("/dsl/no-employee")
 
         Employee = request.env["hr.employee"].sudo()
-        visible_employees = self._visible_employees(employee)
+        if self._is_hr_user():
+            visible_employees = self._active_employees()
+        else:
+            if not self._visible_employees(employee, include_self=False):
+                return request.redirect("/dsl/dashboard")
+            visible_employees = self._visible_employees(employee)
+
         domain = [("id", "in", visible_employees.ids)]
         if "active" in Employee._fields:
             domain.append(("active", "=", True))
@@ -358,15 +600,7 @@ class DslHrPortal(CustomerPortal):
         if not team_employees:
             return request.redirect("/dsl/dashboard")
         values = self._base_values("team", employee)
-        values.update(
-            {
-                "team_employees": team_employees,
-                "team_leave_requests": self._team_request_records("dsl.hr.leave.request", team_employees, 15),
-                "team_attendance_requests": self._team_request_records("dsl.hr.attendance.request", team_employees, 15),
-                "team_support_tickets": self._team_request_records("dsl.hr.support.ticket", team_employees, 15),
-                "team_settlement_requests": self._team_request_records("dsl.hr.settlement.request", team_employees, 10),
-            }
-        )
+        values.update({"team_employees": team_employees})
         return request.render("dsl_hr_portal.dsl_team_page", values)
 
     @http.route(
@@ -386,11 +620,11 @@ class DslHrPortal(CustomerPortal):
         if action_name not in ("review", "approve", "reject"):
             return request.not_found()
 
-        employee = self._require_employee()
-        if not getattr(employee, "id", False):
-            return employee
+        employee = self._get_employee_record()
+        if not employee and not self._is_hr_user():
+            return request.not_found()
 
-        team_employees = self._visible_employees(employee, include_self=False)
+        team_employees = self._overview_employees(employee)
         model_name = model_map.get(request_type)
         if not model_name or not team_employees:
             return request.not_found()
@@ -488,6 +722,6 @@ class DslHrPortal(CustomerPortal):
 
     @http.route(["/my", "/my/home"], type="http", auth="user", website=True)
     def home(self, **kw):
-        if self._get_employee_record():
+        if self._get_employee_record() or self._is_hr_user():
             return request.redirect("/dsl/dashboard")
         return super().home(**kw)

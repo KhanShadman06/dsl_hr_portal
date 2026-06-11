@@ -12,6 +12,13 @@
               sequence="5"
               groups="hr.group_hr_user"/>
 
+    <menuitem id="menu_dsl_hr_company_days"
+              name="Company Calendar"
+              parent="menu_dsl_hr_portal_root"
+              action="action_dsl_hr_company_days"
+              sequence="8"
+              groups="hr.group_hr_user"/>
+
 <menuitem id="menu_dsl_hr_attendance_requests"
               name="Manual Attendance"
               parent="menu_dsl_hr_portal_root"

@@ -123,11 +123,35 @@ class DslHrLeaveRequest(models.Model):
                 [("res_model", "=", self._name), ("res_id", "=", request.id)]
             )
 
-    @api.constrains("date_from", "date_to")
+    def _blocked_company_days(self):
+        self.ensure_one()
+        if not self.date_from or not self.date_to:
+            return self.env["dsl.hr.company.day"].browse()
+
+        company = self.employee_id.company_id
+        domain = [
+            ("active", "=", True),
+            ("date_from", "<=", self.date_to),
+            ("date_to", ">=", self.date_from),
+        ]
+        if company:
+            domain += ["|", ("company_id", "=", False), ("company_id", "=", company.id)]
+        else:
+            domain.append(("company_id", "=", False))
+        return self.env["dsl.hr.company.day"].sudo().search(domain, order="date_from asc, name asc")
+
+    @api.constrains("employee_id", "date_from", "date_to")
     def _check_leave_dates(self):
         for request in self:
             if request.date_from and request.date_to and request.date_to < request.date_from:
                 raise ValidationError(_("End date must be on or after start date."))
+            blocked_days = request._blocked_company_days()
+            if blocked_days:
+                day_names = ", ".join(blocked_days[:3].mapped("name"))
+                raise ValidationError(
+                    _("Leave cannot be requested on company holidays or important days: %s")
+                    % day_names
+                )
 
     def action_approve(self):
         self.write(self._approval_values())

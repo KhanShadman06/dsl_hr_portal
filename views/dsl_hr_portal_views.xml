@@ -225,4 +225,55 @@
         <field name="res_model">dsl.hr.settlement.request</field>
         <field name="view_mode">tree,form</field>
     </record>
+
+    <record id="view_dsl_hr_company_day_tree" model="ir.ui.view">
+        <field name="name">dsl.hr.company.day.tree</field>
+        <field name="model">dsl.hr.company.day</field>
+        <field name="arch" type="xml">
+            <tree string="Company Calendar">
+                <field name="name"/>
+                <field name="day_type"/>
+                <field name="date_from"/>
+                <field name="date_to"/>
+                <field name="company_id"/>
+                <field name="active"/>
+            </tree>
+        </field>
+    </record>
+
+    <record id="view_dsl_hr_company_day_form" model="ir.ui.view">
+        <field name="name">dsl.hr.company.day.form</field>
+        <field name="model">dsl.hr.company.day</field>
+        <field name="arch" type="xml">
+            <form string="Company Calendar Day">
+                <sheet>
+                    <div class="oe_title">
+                        <label for="name"/>
+                        <h1><field name="name" placeholder="Holiday or important day"/></h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="day_type"/>
+                            <field name="date_from"/>
+                            <field name="date_to"/>
+                        </group>
+                        <group>
+                            <field name="company_id"/>
+                            <field name="active"/>
+                        </group>
+                    </group>
+                    <group>
+                        <field name="note"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_dsl_hr_company_days" model="ir.actions.act_window">
+        <field name="name">Company Calendar</field>
+        <field name="res_model">dsl.hr.company.day</field>
+        <field name="view_mode">tree,form</field>
+    </record>
+
 </odoo>
