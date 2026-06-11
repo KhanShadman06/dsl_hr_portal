@@ -1,0 +1,598 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <template id="dsl_login_page" name="DSL HR Portal Login">
+        <t t-call="website.layout">
+            <t t-set="no_header" t-value="True"/>
+            <t t-set="no_footer" t-value="True"/>
+            <div class="dsl-login-page">
+                <section class="dsl-login-visual">
+                    <div class="dsl-login-brand">
+                        <span class="dsl-brand-mark">DSL</span>
+                        <span class="dsl-brand-name">HR Portal</span>
+                    </div>
+                    <div class="dsl-login-copy">
+                        <h1>Employee Portal</h1>
+                        <p>Attendance, leave, support, and settlement in one focused workspace.</p>
+                    </div>
+                </section>
+                <section class="dsl-login-panel">
+                    <form class="dsl-login-form" method="post" action="/web/login">
+                        <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                        <input type="hidden" name="redirect" t-att-value="redirect"/>
+                        <div class="dsl-form-header">
+                            <span class="dsl-kicker">Secure access</span>
+                            <h2>Sign in</h2>
+                        </div>
+                        <label class="dsl-field">
+                            <span>Email</span>
+                            <input type="text" name="login" autocomplete="username" required="required"/>
+                        </label>
+                        <label class="dsl-field">
+                            <span>Password</span>
+                            <input type="password" name="password" autocomplete="current-password" required="required"/>
+                        </label>
+                        <button class="dsl-primary-btn" type="submit">
+                            <i class="fa fa-sign-in"/>
+                            <span>Enter Portal</span>
+                        </button>
+                    </form>
+                </section>
+            </div>
+        </t>
+    </template>
+
+    <template id="dsl_portal_layout" name="DSL HR Portal Layout">
+        <t t-call="website.layout">
+            <t t-set="no_header" t-value="True"/>
+            <t t-set="no_footer" t-value="True"/>
+            <div class="dsl-portal-app" t-att-data-csrf-token="request.csrf_token()">
+                <aside class="dsl-sidebar">
+                    <a class="dsl-sidebar-brand" href="/dsl/dashboard">
+                        <span class="dsl-brand-mark">DSL</span>
+                        <span>
+                            <strong>HR Portal</strong>
+                            <small>Employee workspace</small>
+                        </span>
+                    </a>
+                    <nav class="dsl-nav">
+                        <a t-attf-class="dsl-nav-link #{'is-active' if page_name == 'dashboard' else ''}" href="/dsl/dashboard">
+                            <i class="fa fa-tachometer"/>
+                            <span>Dashboard</span>
+                        </a>
+                        <a t-attf-class="dsl-nav-link #{'is-active' if page_name == 'attendance' else ''}" href="/dsl/attendance">
+                            <i class="fa fa-clock-o"/>
+                            <span>Attendance</span>
+                        </a>
+                        <a t-attf-class="dsl-nav-link #{'is-active' if page_name == 'leave' else ''}" href="/dsl/leave">
+                            <i class="fa fa-calendar"/>
+                            <span>Leave</span>
+                        </a>
+                        <a t-attf-class="dsl-nav-link #{'is-active' if page_name == 'directory' else ''}" href="/dsl/directory">
+                            <i class="fa fa-users"/>
+                            <span>Directory</span>
+                        </a>
+                        <a t-attf-class="dsl-nav-link #{'is-active' if page_name == 'discuss' else ''}" href="/dsl/discuss">
+                            <i class="fa fa-comments"/>
+                            <span>Discuss</span>
+                        </a>
+                        <a t-attf-class="dsl-nav-link #{'is-active' if page_name == 'support' else ''}" href="/dsl/support">
+                            <i class="fa fa-life-ring"/>
+                            <span>Help Desk</span>
+                        </a>
+                        <a t-attf-class="dsl-nav-link #{'is-active' if page_name == 'settlement' else ''}" href="/dsl/settlement">
+                            <i class="fa fa-sign-out"/>
+                            <span>Settlement</span>
+                        </a>
+                    </nav>
+                    <div class="dsl-sidebar-footer">
+                        <span t-esc="employee_name"/>
+                        <a href="/web/session/logout?redirect=/dsl/login">Logout</a>
+                    </div>
+                </aside>
+                <main class="dsl-main">
+                    <header class="dsl-topbar">
+                        <div>
+                            <span class="dsl-kicker">Today</span>
+                            <h1>
+                                <t t-if="page_name == 'dashboard'">Dashboard</t>
+                                <t t-elif="page_name == 'attendance'">Attendance</t>
+                                <t t-elif="page_name == 'leave'">Leave &amp; Holidays</t>
+                                <t t-elif="page_name == 'directory'">Employee Connect</t>
+                                <t t-elif="page_name == 'discuss'">Discuss</t>
+                                <t t-elif="page_name == 'support'">Help Desk</t>
+                                <t t-elif="page_name == 'settlement'">Settlement</t>
+                                <t t-else="">HR Portal</t>
+                            </h1>
+                        </div>
+                        <a class="dsl-icon-btn" href="/web/session/logout?redirect=/dsl/login" title="Logout">
+                            <i class="fa fa-power-off"/>
+                        </a>
+                    </header>
+                    <div class="dsl-js-alert" role="status"/>
+                    <t t-out="0"/>
+                </main>
+            </div>
+        </t>
+    </template>
+
+    <template id="dsl_no_employee_page" name="DSL No Employee">
+        <t t-call="dsl_hr_portal.dsl_portal_layout">
+            <section class="dsl-empty-state">
+                <i class="fa fa-id-badge"/>
+                <h2>Employee profile not linked</h2>
+                <p>Your portal user needs to be linked to an employee profile before this workspace can open.</p>
+            </section>
+        </t>
+    </template>
+
+    <template id="dsl_status_badge" name="DSL Status Badge">
+        <span t-attf-class="dsl-status dsl-status-#{record.state}">
+            <t t-if="record.state == 'draft'">Draft</t>
+            <t t-elif="record.state == 'submitted'">Submitted</t>
+            <t t-elif="record.state == 'under_review'">Under Review</t>
+            <t t-elif="record.state == 'approved'">Approved</t>
+            <t t-elif="record.state == 'rejected'">Rejected</t>
+            <t t-else=""><span t-esc="record.state"/></t>
+        </span>
+    </template>
+
+    <template id="dsl_dashboard_page" name="DSL Dashboard">
+        <t t-call="dsl_hr_portal.dsl_portal_layout">
+            <section class="dsl-welcome-band">
+                <div>
+                    <span class="dsl-kicker">Welcome back</span>
+                    <h2 t-esc="employee.name"/>
+                    <p>
+                        <t t-if="employee.job_id"><span t-esc="employee.job_id.name"/></t>
+                        <t t-if="employee.department_id"> / <span t-esc="employee.department_id.name"/></t>
+                    </p>
+                </div>
+                <div class="dsl-shift-chip">
+                    <i class="fa fa-map-marker"/>
+                    <t t-if="open_attendance">Clocked in</t>
+                    <t t-else="">Ready</t>
+                </div>
+            </section>
+
+            <section class="dsl-metric-grid">
+                <a class="dsl-metric dsl-metric-teal" href="/dsl/attendance">
+                    <span>Attendance</span>
+                    <strong>
+                        <t t-if="open_attendance">Open</t>
+                        <t t-else="">Clear</t>
+                    </strong>
+                    <i class="fa fa-clock-o"/>
+                </a>
+                <a class="dsl-metric dsl-metric-coral" href="/dsl/leave">
+                    <span>Leave Requests</span>
+                    <strong t-esc="len(leave_requests)"/>
+                    <i class="fa fa-calendar"/>
+                </a>
+                <a class="dsl-metric dsl-metric-gold" href="/dsl/support">
+                    <span>Tickets</span>
+                    <strong t-esc="len(support_tickets)"/>
+                    <i class="fa fa-life-ring"/>
+                </a>
+                <a class="dsl-metric dsl-metric-green" href="/dsl/settlement">
+                    <span>Settlement</span>
+                    <strong t-esc="len(settlement_requests)"/>
+                    <i class="fa fa-sign-out"/>
+                </a>
+            </section>
+
+            <section class="dsl-dashboard-grid">
+                <div class="dsl-panel">
+                    <div class="dsl-panel-title">
+                        <h3>Recent Attendance</h3>
+                        <a href="/dsl/attendance">View all</a>
+                    </div>
+                    <div class="dsl-list">
+                        <t t-foreach="recent_attendance" t-as="record">
+                            <div class="dsl-list-row">
+                                <i class="fa fa-calendar-check-o"/>
+                                <span>
+                                    <strong t-esc="record.check_in"/>
+                                    <small>
+                                        <t t-if="record.check_out">Out: <span t-esc="record.check_out"/></t>
+                                        <t t-else="">Open attendance</t>
+                                    </small>
+                                </span>
+                            </div>
+                        </t>
+                        <t t-if="not recent_attendance">
+                            <div class="dsl-muted-row">No attendance entries yet.</div>
+                        </t>
+                    </div>
+                </div>
+                <div class="dsl-panel">
+                    <div class="dsl-panel-title">
+                        <h3>Open Requests</h3>
+                        <a href="/dsl/support">New ticket</a>
+                    </div>
+                    <div class="dsl-list">
+                        <t t-foreach="leave_requests" t-as="record">
+                            <div class="dsl-list-row">
+                                <i class="fa fa-calendar"/>
+                                <span>
+                                    <strong>Leave / <span t-esc="record.date_from"/></strong>
+                                    <small><t t-call="dsl_hr_portal.dsl_status_badge"/></small>
+                                </span>
+                            </div>
+                        </t>
+                        <t t-foreach="attendance_requests" t-as="record">
+                            <div class="dsl-list-row">
+                                <i class="fa fa-inbox"/>
+                                <span>
+                                    <strong>Attendance / <span t-esc="record.request_date"/></strong>
+                                    <small><t t-call="dsl_hr_portal.dsl_status_badge"/></small>
+                                </span>
+                            </div>
+                        </t>
+                        <t t-foreach="support_tickets" t-as="record">
+                            <div class="dsl-list-row">
+                                <i class="fa fa-life-ring"/>
+                                <span>
+                                    <strong><span t-esc="record.name"/> / <span t-esc="record.subject"/></strong>
+                                    <small><t t-call="dsl_hr_portal.dsl_status_badge"/></small>
+                                </span>
+                            </div>
+                        </t>
+                        <t t-if="not (leave_requests or attendance_requests or support_tickets)">
+                            <div class="dsl-muted-row">No active requests.</div>
+                        </t>
+                    </div>
+                </div>
+            </section>
+        </t>
+    </template>
+
+    <template id="dsl_attendance_page" name="DSL Attendance">
+        <t t-call="dsl_hr_portal.dsl_portal_layout">
+            <section class="dsl-action-band">
+                <div>
+                    <span class="dsl-kicker">Live Punch</span>
+                    <h2>
+                        <t t-if="open_attendance">Currently clocked in</t>
+                        <t t-else="">Not clocked in</t>
+                    </h2>
+                </div>
+                <div class="dsl-button-row">
+                    <button class="dsl-primary-btn" type="button" data-dsl-punch="clock_in" t-att-disabled="'disabled' if open_attendance else None">
+                        <i class="fa fa-play"/>
+                        <span>Clock In</span>
+                    </button>
+                    <button class="dsl-secondary-btn" type="button" data-dsl-punch="clock_out" t-att-disabled="None if open_attendance else 'disabled'">
+                        <i class="fa fa-stop"/>
+                        <span>Clock Out</span>
+                    </button>
+                </div>
+            </section>
+
+            <section class="dsl-two-column">
+                <div class="dsl-panel">
+                    <div class="dsl-panel-title">
+                        <h3>Manual Attendance</h3>
+                    </div>
+                    <form class="dsl-form-grid" method="post" action="/dsl/attendance/manual">
+                        <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                        <label class="dsl-field">
+                            <span>Date</span>
+                            <input type="date" name="request_date" required="required"/>
+                        </label>
+                        <label class="dsl-field">
+                            <span>Punch In</span>
+                            <input type="time" name="check_in_time" required="required"/>
+                        </label>
+                        <label class="dsl-field">
+                            <span>Punch Out</span>
+                            <input type="time" name="check_out_time" required="required"/>
+                        </label>
+                        <label class="dsl-field dsl-span-2">
+                            <span>Justification</span>
+                            <textarea name="justification" rows="4" required="required"></textarea>
+                        </label>
+                        <button class="dsl-primary-btn dsl-span-2" type="submit">
+                            <i class="fa fa-paper-plane"/>
+                            <span>Submit Request</span>
+                        </button>
+                    </form>
+                </div>
+                <div class="dsl-panel">
+                    <div class="dsl-panel-title">
+                        <h3>Recent Logs</h3>
+                    </div>
+                    <table class="dsl-table">
+                        <thead>
+                            <tr>
+                                <th>Clock In</th>
+                                <th>Clock Out</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <t t-foreach="attendance_records" t-as="record">
+                                <tr>
+                                    <td t-esc="record.check_in"/>
+                                    <td>
+                                        <t t-if="record.check_out"><span t-esc="record.check_out"/></t>
+                                        <t t-else="">Open</t>
+                                    </td>
+                                </tr>
+                            </t>
+                            <t t-if="not attendance_records">
+                                <tr><td colspan="2">No attendance entries.</td></tr>
+                            </t>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="dsl-panel">
+                <div class="dsl-panel-title">
+                    <h3>Manual Requests</h3>
+                </div>
+                <table class="dsl-table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Punch In</th>
+                            <th>Punch Out</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <t t-foreach="manual_requests" t-as="record">
+                            <tr>
+                                <td t-esc="record.request_date"/>
+                                <td t-esc="record.check_in"/>
+                                <td t-esc="record.check_out"/>
+                                <td><t t-call="dsl_hr_portal.dsl_status_badge"/></td>
+                            </tr>
+                        </t>
+                        <t t-if="not manual_requests">
+                            <tr><td colspan="4">No manual requests.</td></tr>
+                        </t>
+                    </tbody>
+                </table>
+            </section>
+        </t>
+    </template>
+
+    <template id="dsl_leave_page" name="DSL Leave">
+        <t t-call="dsl_hr_portal.dsl_portal_layout">
+            <section class="dsl-two-column">
+                <div class="dsl-panel">
+                    <div class="dsl-panel-title">
+                        <h3>New Leave Request</h3>
+                    </div>
+                    <form class="dsl-form-grid" method="post" action="/dsl/leave/request" enctype="multipart/form-data">
+                        <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                        <label class="dsl-field dsl-span-2">
+                            <span>Leave Type</span>
+                            <select name="leave_type" required="required">
+                                <option value="casual">Casual</option>
+                                <option value="sick">Sick</option>
+                                <option value="annual">Annual</option>
+                                <option value="unpaid">Unpaid</option>
+                                <option value="other">Other</option>
+                            </select>
+                        </label>
+                        <label class="dsl-field">
+                            <span>From</span>
+                            <input type="date" name="date_from" required="required"/>
+                        </label>
+                        <label class="dsl-field">
+                            <span>To</span>
+                            <input type="date" name="date_to" required="required"/>
+                        </label>
+                        <label class="dsl-field dsl-span-2">
+                            <span>Attachment</span>
+                            <input type="file" name="attachment"/>
+                        </label>
+                        <label class="dsl-field dsl-span-2">
+                            <span>Reason</span>
+                            <textarea name="reason" rows="4" required="required"></textarea>
+                        </label>
+                        <button class="dsl-primary-btn dsl-span-2" type="submit">
+                            <i class="fa fa-paper-plane"/>
+                            <span>Submit Leave</span>
+                        </button>
+                    </form>
+                </div>
+                <div class="dsl-panel">
+                    <div class="dsl-panel-title">
+                        <h3>My Leave Requests</h3>
+                    </div>
+                    <div class="dsl-list">
+                        <t t-foreach="leave_requests" t-as="record">
+                            <div class="dsl-list-row">
+                                <i class="fa fa-calendar"/>
+                                <span>
+                                    <strong><span t-esc="record.date_from"/> to <span t-esc="record.date_to"/></strong>
+                                    <small>
+                                        <span t-esc="record.day_count"/> day(s)
+                                        <t t-call="dsl_hr_portal.dsl_status_badge"/>
+                                    </small>
+                                </span>
+                            </div>
+                        </t>
+                        <t t-if="not leave_requests">
+                            <div class="dsl-muted-row">No leave requests.</div>
+                        </t>
+                    </div>
+                </div>
+            </section>
+        </t>
+    </template>
+
+    <template id="dsl_directory_page" name="DSL Directory">
+        <t t-call="dsl_hr_portal.dsl_portal_layout">
+            <section class="dsl-panel">
+                <div class="dsl-panel-title">
+                    <h3>Employee Connect</h3>
+                    <form class="dsl-search" method="get" action="/dsl/directory">
+                        <input type="search" name="q" t-att-value="search_query" placeholder="Search people"/>
+                        <button type="submit"><i class="fa fa-search"/></button>
+                    </form>
+                </div>
+                <div class="dsl-directory-grid">
+                    <t t-foreach="directory_rows" t-as="row">
+                        <article class="dsl-person-card">
+                            <div class="dsl-avatar"><t t-esc="row['name'][:1]"/></div>
+                            <div>
+                                <h4 t-esc="row['name']"/>
+                                <p t-esc="row['job_title']"/>
+                                <small>
+                                    <span t-esc="row['department']"/>
+                                    <t t-if="row['work_email']"> / <span t-esc="row['work_email']"/></t>
+                                </small>
+                            </div>
+                        </article>
+                    </t>
+                    <t t-if="not directory_rows">
+                        <div class="dsl-muted-row">No employees found.</div>
+                    </t>
+                </div>
+            </section>
+        </t>
+    </template>
+
+    <template id="dsl_discuss_page" name="DSL Discuss">
+        <t t-call="dsl_hr_portal.dsl_portal_layout">
+            <section class="dsl-action-band">
+                <div>
+                    <span class="dsl-kicker">HR conversations</span>
+                    <h2>Discuss</h2>
+                </div>
+                <a class="dsl-primary-btn" href="/dsl/support">
+                    <i class="fa fa-plus"/>
+                    <span>Open Ticket</span>
+                </a>
+            </section>
+            <section class="dsl-panel">
+                <div class="dsl-panel-title">
+                    <h3>Recent Threads</h3>
+                </div>
+                <div class="dsl-list">
+                    <t t-foreach="support_tickets" t-as="record">
+                        <div class="dsl-list-row">
+                            <i class="fa fa-comment"/>
+                            <span>
+                                <strong><span t-esc="record.name"/> / <span t-esc="record.subject"/></strong>
+                                <small><t t-call="dsl_hr_portal.dsl_status_badge"/></small>
+                            </span>
+                        </div>
+                    </t>
+                    <t t-if="not support_tickets">
+                        <div class="dsl-muted-row">No threads yet.</div>
+                    </t>
+                </div>
+            </section>
+        </t>
+    </template>
+
+    <template id="dsl_support_page" name="DSL Support">
+        <t t-call="dsl_hr_portal.dsl_portal_layout">
+            <section class="dsl-two-column">
+                <div class="dsl-panel">
+                    <div class="dsl-panel-title">
+                        <h3>New Ticket</h3>
+                    </div>
+                    <form class="dsl-form-grid" method="post" action="/dsl/support/create">
+                        <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                        <label class="dsl-field dsl-span-2">
+                            <span>Subject</span>
+                            <input type="text" name="subject" required="required"/>
+                        </label>
+                        <label class="dsl-field dsl-span-2">
+                            <span>Category</span>
+                            <select name="category" required="required">
+                                <option value="general">General</option>
+                                <option value="attendance">Attendance</option>
+                                <option value="leave">Leave</option>
+                                <option value="documents">Documents</option>
+                                <option value="settlement">Settlement</option>
+                            </select>
+                        </label>
+                        <label class="dsl-field dsl-span-2">
+                            <span>Description</span>
+                            <textarea name="description" rows="5" required="required"></textarea>
+                        </label>
+                        <button class="dsl-primary-btn dsl-span-2" type="submit">
+                            <i class="fa fa-paper-plane"/>
+                            <span>Submit Ticket</span>
+                        </button>
+                    </form>
+                </div>
+                <div class="dsl-panel">
+                    <div class="dsl-panel-title">
+                        <h3>Ticket History</h3>
+                    </div>
+                    <div class="dsl-list">
+                        <t t-foreach="support_tickets" t-as="record">
+                            <div class="dsl-list-row">
+                                <i class="fa fa-life-ring"/>
+                                <span>
+                                    <strong><span t-esc="record.name"/> / <span t-esc="record.subject"/></strong>
+                                    <small><t t-call="dsl_hr_portal.dsl_status_badge"/></small>
+                                </span>
+                            </div>
+                        </t>
+                        <t t-if="not support_tickets">
+                            <div class="dsl-muted-row">No tickets yet.</div>
+                        </t>
+                    </div>
+                </div>
+            </section>
+        </t>
+    </template>
+
+    <template id="dsl_settlement_page" name="DSL Settlement">
+        <t t-call="dsl_hr_portal.dsl_portal_layout">
+            <section class="dsl-two-column">
+                <div class="dsl-panel">
+                    <div class="dsl-panel-title">
+                        <h3>Resignation Request</h3>
+                    </div>
+                    <form class="dsl-form-grid" method="post" action="/dsl/settlement/submit">
+                        <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                        <label class="dsl-field dsl-span-2">
+                            <span>Last Working Day</span>
+                            <input type="date" name="last_working_day" required="required"/>
+                        </label>
+                        <label class="dsl-check dsl-span-2">
+                            <input type="checkbox" name="notice_acknowledged" value="1" required="required"/>
+                            <span>Notice period acknowledged</span>
+                        </label>
+                        <label class="dsl-field dsl-span-2">
+                            <span>Formal Justification</span>
+                            <textarea name="reason" rows="5" required="required"></textarea>
+                        </label>
+                        <button class="dsl-primary-btn dsl-span-2" type="submit">
+                            <i class="fa fa-paper-plane"/>
+                            <span>Submit Settlement</span>
+                        </button>
+                    </form>
+                </div>
+                <div class="dsl-panel">
+                    <div class="dsl-panel-title">
+                        <h3>Settlement History</h3>
+                    </div>
+                    <div class="dsl-list">
+                        <t t-foreach="settlement_requests" t-as="record">
+                            <div class="dsl-list-row">
+                                <i class="fa fa-sign-out"/>
+                                <span>
+                                    <strong>Last day: <span t-esc="record.last_working_day"/></strong>
+                                    <small><t t-call="dsl_hr_portal.dsl_status_badge"/></small>
+                                </span>
+                            </div>
+                        </t>
+                        <t t-if="not settlement_requests">
+                            <div class="dsl-muted-row">No settlement requests.</div>
+                        </t>
+                    </div>
+                </div>
+            </section>
+        </t>
+    </template>
+</odoo>
