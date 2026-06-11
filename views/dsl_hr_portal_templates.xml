@@ -763,33 +763,100 @@
                     <span class="dsl-kicker">HR conversations</span>
                     <h2>Discuss</h2>
                 </div>
-                <a class="dsl-primary-btn" href="/dsl/support">
-                    <i class="fa fa-plus"/>
-                    <span>Open Ticket</span>
-                </a>
+                <form method="post" action="/dsl/discuss/hr">
+                    <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                    <button class="dsl-primary-btn" type="submit" t-att-disabled="None if hr_partner else 'disabled'">
+                        <i class="fa fa-comment"/>
+                        <span>Chat with HR</span>
+                    </button>
+                </form>
             </section>
-            <section class="dsl-panel">
-                <div class="dsl-panel-title">
-                    <h3>Recent Threads</h3>
-                </div>
-                <div class="dsl-list">
-                    <t t-foreach="support_tickets" t-as="record">
-                        <div class="dsl-list-row">
-                            <i class="fa fa-comment"/>
-                            <span>
-                                <strong><span t-esc="record.name"/> / <span t-esc="record.subject"/></strong>
-                                <small><t t-call="dsl_hr_portal.dsl_status_badge"/></small>
-                            </span>
+
+            <t t-if="discuss_error == 'no_hr'">
+                <section class="dsl-alert is-error">No HR user is available for direct chat.</section>
+            </t>
+
+            <section class="dsl-discuss-shell">
+                <aside class="dsl-panel dsl-discuss-sidebar">
+                    <div class="dsl-panel-title">
+                        <h3>Conversations</h3>
+                    </div>
+                    <div class="dsl-conversation-list">
+                        <t t-foreach="discuss_channel_rows" t-as="row">
+                            <a t-attf-class="dsl-conversation-link #{'is-active' if row['active'] else ''}" t-attf-href="/dsl/discuss?channel_id=#{row['channel'].id}">
+                                <span class="dsl-avatar"><t t-esc="row['name'][:1] if row['name'] else '#'"/></span>
+                                <span>
+                                    <strong t-esc="row['name']"/>
+                                    <small>
+                                        <t t-if="row['last_message']">
+                                            <span t-esc="row['last_message'].author_id.name or 'Message'"/>
+                                            <t t-if="row['last_message'].date"> / <span t-esc="row['last_message'].date"/></t>
+                                        </t>
+                                        <t t-else="">No messages yet</t>
+                                    </small>
+                                </span>
+                            </a>
+                        </t>
+                        <t t-if="not discuss_channel_rows">
+                            <div class="dsl-muted-row">Start a conversation with HR.</div>
+                        </t>
+                    </div>
+                </aside>
+
+                <section class="dsl-panel dsl-discuss-thread">
+                    <t t-if="active_channel">
+                        <div class="dsl-discuss-thread-header">
+                            <div>
+                                <span class="dsl-kicker">Conversation</span>
+                                <h3 t-esc="active_channel_name"/>
+                            </div>
+                            <a class="dsl-secondary-btn" href="/dsl/support">
+                                <i class="fa fa-life-ring"/>
+                                <span>Help Desk</span>
+                            </a>
                         </div>
+
+                        <div class="dsl-message-list">
+                            <t t-foreach="discuss_messages" t-as="message">
+                                <article t-attf-class="dsl-message #{'is-self' if message.author_id.id == request.env.user.partner_id.id else ''}">
+                                    <div class="dsl-message-meta">
+                                        <strong t-esc="message.author_id.name or 'System'"/>
+                                        <small t-esc="message.date"/>
+                                    </div>
+                                    <div class="dsl-message-body">
+                                        <t t-out="message.body"/>
+                                    </div>
+                                </article>
+                            </t>
+                            <t t-if="not discuss_messages">
+                                <div class="dsl-muted-row">No messages yet.</div>
+                            </t>
+                        </div>
+
+                        <form class="dsl-message-form" method="post" action="/dsl/discuss/send">
+                            <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                            <input type="hidden" name="channel_id" t-att-value="active_channel.id"/>
+                            <label class="dsl-field">
+                                <span>Message</span>
+                                <textarea name="body" rows="3" required="required" placeholder="Write a message"></textarea>
+                            </label>
+                            <button class="dsl-primary-btn" type="submit">
+                                <i class="fa fa-paper-plane"/>
+                                <span>Send</span>
+                            </button>
+                        </form>
                     </t>
-                    <t t-if="not support_tickets">
-                        <div class="dsl-muted-row">No threads yet.</div>
+                    <t t-else="">
+                        <section class="dsl-empty-state dsl-discuss-empty">
+                            <i class="fa fa-comments"/>
+                            <h2>No conversation selected</h2>
+                            <p>Start a direct chat with HR to send your first message.</p>
+                        </section>
                     </t>
-                </div>
+                </section>
             </section>
         </t>
     </template>
-
     <template id="dsl_support_page" name="DSL Support">
         <t t-call="dsl_hr_portal.dsl_portal_layout">
             <section class="dsl-two-column">

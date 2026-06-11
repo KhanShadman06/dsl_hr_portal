@@ -5,6 +5,7 @@ import json
 from datetime import datetime, time
 
 import pytz
+from markupsafe import Markup, escape
 
 from odoo import fields, http
 from odoo.exceptions import ValidationError
@@ -321,6 +322,112 @@ class DslHrPortal(CustomerPortal):
 
     def _overview_label(self):
         return "Company" if self._is_hr_user() else "Team"
+
+
+    def _discuss_partner(self):
+        return request.env.user.partner_id
+
+    def _discuss_message_domain(self, channel):
+        return [
+            ("model", "=", "discuss.channel"),
+            ("res_id", "=", channel.id),
+            ("message_type", "!=", "notification"),
+        ]
+
+    def _discuss_channels(self, partner):
+        Channel = request.env["discuss.channel"].sudo()
+        if not partner:
+            return Channel.browse()
+
+        Member = request.env["discuss.channel.member"].sudo()
+        order = "id desc"
+        if "last_interest_dt" in Member._fields:
+            order = "last_interest_dt desc, id desc"
+        elif "last_seen_dt" in Member._fields:
+            order = "last_seen_dt desc, id desc"
+        members = Member.search(
+            [("partner_id", "=", partner.id), ("channel_id.active", "=", True)],
+            order=order,
+        )
+        return members.mapped("channel_id")
+
+    def _discuss_accessible_channel(self, channel_id, partner):
+        Channel = request.env["discuss.channel"].sudo()
+        if not partner or not channel_id:
+            return Channel.browse()
+        try:
+            channel_id = int(channel_id)
+        except (TypeError, ValueError):
+            return Channel.browse()
+
+        channel = Channel.browse(channel_id).exists()
+        if not channel or partner.id not in channel.channel_member_ids.mapped("partner_id").ids:
+            return Channel.browse()
+        return channel
+
+    def _discuss_channel_name(self, channel, current_partner):
+        if not channel:
+            return ""
+        if channel.channel_type == "chat":
+            other_partners = channel.channel_member_ids.mapped("partner_id").filtered(
+                lambda partner: partner.id != current_partner.id
+            )
+            if other_partners:
+                return ", ".join(other_partners.mapped("name"))
+        return channel.name or channel.display_name
+
+    def _discuss_channel_rows(self, channels, active_channel, partner):
+        Message = request.env["mail.message"].sudo()
+        rows = []
+        for channel in channels:
+            last_message = Message.search(
+                self._discuss_message_domain(channel),
+                limit=1,
+                order="date desc, id desc",
+            )
+            rows.append(
+                {
+                    "channel": channel,
+                    "name": self._discuss_channel_name(channel, partner),
+                    "last_message": last_message,
+                    "active": bool(active_channel and channel.id == active_channel.id),
+                }
+            )
+        return rows
+
+    def _discuss_messages(self, channel, limit=50):
+        Message = request.env["mail.message"].sudo()
+        if not channel:
+            return Message.browse()
+        messages = Message.search(
+            self._discuss_message_domain(channel),
+            limit=limit,
+            order="date desc, id desc",
+        )
+        return messages.sorted(lambda message: (message.date, message.id))
+
+    def _discuss_hr_partner(self, current_partner):
+        Users = request.env["res.users"].sudo()
+        domain = [("active", "=", True), ("partner_id", "!=", current_partner.id)]
+        if "share" in Users._fields:
+            domain.append(("share", "=", False))
+
+        hr_group = request.env.ref("hr.group_hr_user", raise_if_not_found=False)
+        if hr_group:
+            hr_user = Users.search(domain + [("groups_id", "in", [hr_group.id])], limit=1)
+            if hr_user and hr_user.partner_id:
+                return hr_user.partner_id
+
+        internal_group = request.env.ref("base.group_user", raise_if_not_found=False)
+        if internal_group:
+            internal_user = Users.search(domain + [("groups_id", "in", [internal_group.id])], limit=1)
+            if internal_user and internal_user.partner_id:
+                return internal_user.partner_id
+        return request.env["res.partner"].sudo().browse()
+
+    def _discuss_message_body(self, body):
+        lines = (body or "").strip().splitlines()
+        return Markup("<br/>").join(escape(line) for line in lines)
 
     @http.route("/dsl/login", type="http", auth="public", website=True)
     def dsl_login(self, **kw):
@@ -644,13 +751,76 @@ class DslHrPortal(CustomerPortal):
         return request.redirect("/dsl/team?updated=1")
 
     @http.route("/dsl/discuss", type="http", auth="user", website=True)
-    def dsl_discuss(self, **kw):
+    def dsl_discuss(self, channel_id=None, error=None, **kw):
         employee = self._require_employee()
         if not getattr(employee, "id", False):
             return employee
+
+        partner = self._discuss_partner()
+        channels = self._discuss_channels(partner)
+        active_channel = self._discuss_accessible_channel(channel_id, partner)
+        if not active_channel and channels:
+            active_channel = channels[:1]
+
         values = self._base_values("discuss", employee)
-        values["support_tickets"] = self._request_records("dsl.hr.support.ticket", employee, 5)
+        values.update(
+            {
+                "discuss_channel_rows": self._discuss_channel_rows(channels, active_channel, partner),
+                "active_channel": active_channel,
+                "active_channel_name": self._discuss_channel_name(active_channel, partner),
+                "discuss_messages": self._discuss_messages(active_channel),
+                "hr_partner": self._discuss_hr_partner(partner),
+                "discuss_error": error,
+            }
+        )
         return request.render("dsl_hr_portal.dsl_discuss_page", values)
+
+    @http.route(
+        "/dsl/discuss/hr",
+        type="http",
+        auth="user",
+        website=True,
+        methods=["POST"],
+    )
+    def dsl_discuss_hr(self, **post):
+        employee = self._require_employee()
+        if not getattr(employee, "id", False):
+            return employee
+
+        partner = self._discuss_partner()
+        hr_partner = self._discuss_hr_partner(partner)
+        if not hr_partner:
+            return request.redirect("/dsl/discuss?error=no_hr")
+
+        channel = request.env["discuss.channel"].sudo().channel_get([hr_partner.id])
+        return request.redirect("/dsl/discuss?channel_id=%s" % channel.id)
+
+    @http.route(
+        "/dsl/discuss/send",
+        type="http",
+        auth="user",
+        website=True,
+        methods=["POST"],
+    )
+    def dsl_discuss_send(self, **post):
+        employee = self._require_employee()
+        if not getattr(employee, "id", False):
+            return employee
+
+        partner = self._discuss_partner()
+        channel = self._discuss_accessible_channel(post.get("channel_id"), partner)
+        if not channel:
+            return request.not_found()
+
+        body = (post.get("body") or "").strip()
+        if body:
+            channel.sudo().message_post(
+                body=self._discuss_message_body(body),
+                author_id=partner.id,
+                message_type="comment",
+                subtype_xmlid="mail.mt_comment",
+            )
+        return request.redirect("/dsl/discuss?channel_id=%s" % channel.id)
 
     @http.route("/dsl/support", type="http", auth="user", website=True)
     def dsl_support(self, **kw):
