@@ -1,5 +1,80 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
+    <record id="view_dsl_hr_portal_user_employee_tree" model="ir.ui.view">
+        <field name="name">hr.employee.dsl.hr.portal.user.tree</field>
+        <field name="model">hr.employee</field>
+        <field name="arch" type="xml">
+            <tree string="Portal Users">
+                <field name="name"/>
+                <field name="work_email"/>
+                <field name="user_id" string="Portal Login"/>
+                <field name="department_id"/>
+                <field name="job_id"/>
+                <field name="parent_id" string="Manager"/>
+                <field name="company_id"/>
+            </tree>
+        </field>
+    </record>
+
+    <record id="view_dsl_hr_portal_user_employee_form" model="ir.ui.view">
+        <field name="name">hr.employee.dsl.hr.portal.user.form</field>
+        <field name="model">hr.employee</field>
+        <field name="arch" type="xml">
+            <form string="Portal User">
+                <header>
+                    <button name="action_create_dsl_portal_user"
+                            type="object"
+                            string="Create Portal Access"
+                            class="btn-primary"
+                            invisible="user_id"/>
+                    <button name="action_create_dsl_portal_user"
+                            type="object"
+                            string="Refresh Portal Access"
+                            class="btn-secondary"
+                            invisible="not user_id"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <label for="name"/>
+                        <h1>
+                            <field name="name" placeholder="Employee Name"/>
+                        </h1>
+                    </div>
+                    <group>
+                        <group string="Employee">
+                            <field name="work_email" required="1"/>
+                            <field name="company_id"/>
+                            <field name="department_id"/>
+                            <field name="job_id"/>
+                            <field name="parent_id" string="Manager"/>
+                        </group>
+                        <group string="Portal Access">
+                            <field name="user_id" readonly="1" string="Portal Login"/>
+                            <field name="dsl_manager_user_ids" widget="many2many_tags" readonly="1"/>
+                        </group>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_dsl_hr_portal_users" model="ir.actions.act_window">
+        <field name="name">Portal Users</field>
+        <field name="res_model">hr.employee</field>
+        <field name="view_mode">tree,form</field>
+        <field name="domain">[("user_id", "!=", False), ("user_id.share", "=", True)]</field>
+        <field name="context">{"dsl_create_portal_user": True}</field>
+        <field name="view_ids" eval="[(5, 0, 0), (0, 0, {&quot;view_mode&quot;: &quot;tree&quot;, &quot;view_id&quot;: ref(&quot;view_dsl_hr_portal_user_employee_tree&quot;)}), (0, 0, {&quot;view_mode&quot;: &quot;form&quot;, &quot;view_id&quot;: ref(&quot;view_dsl_hr_portal_user_employee_form&quot;)})]"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Create your first portal user
+            </p>
+            <p>
+                Use New to create an employee and automatically link portal access.
+            </p>
+        </field>
+    </record>
+
     <record id="view_employee_form_dsl_hr_portal" model="ir.ui.view">
         <field name="name">hr.employee.form.dsl.hr.portal</field>
         <field name="model">hr.employee</field>

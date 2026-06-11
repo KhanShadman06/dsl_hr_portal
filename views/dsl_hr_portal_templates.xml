@@ -59,6 +59,12 @@
                             <i class="fa fa-tachometer"/>
                             <span>Dashboard</span>
                         </a>
+                        <t t-if="has_team">
+                            <a t-attf-class="dsl-nav-link #{'is-active' if page_name == 'team' else ''}" href="/dsl/team">
+                                <i class="fa fa-sitemap"/>
+                                <span>My Team</span>
+                            </a>
+                        </t>
                         <a t-attf-class="dsl-nav-link #{'is-active' if page_name == 'attendance' else ''}" href="/dsl/attendance">
                             <i class="fa fa-clock-o"/>
                             <span>Attendance</span>
@@ -67,10 +73,12 @@
                             <i class="fa fa-calendar"/>
                             <span>Leave</span>
                         </a>
-                        <a t-attf-class="dsl-nav-link #{'is-active' if page_name == 'directory' else ''}" href="/dsl/directory">
-                            <i class="fa fa-users"/>
-                            <span>Directory</span>
-                        </a>
+                        <t t-if="has_team">
+                            <a t-attf-class="dsl-nav-link #{'is-active' if page_name == 'directory' else ''}" href="/dsl/directory">
+                                <i class="fa fa-users"/>
+                                <span>Directory</span>
+                            </a>
+                        </t>
                         <a t-attf-class="dsl-nav-link #{'is-active' if page_name == 'discuss' else ''}" href="/dsl/discuss">
                             <i class="fa fa-comments"/>
                             <span>Discuss</span>
@@ -98,6 +106,7 @@
                                 <t t-elif="page_name == 'attendance'">Attendance</t>
                                 <t t-elif="page_name == 'leave'">Leave &amp; Holidays</t>
                                 <t t-elif="page_name == 'directory'">Employee Connect</t>
+                                <t t-elif="page_name == 'team'">My Team</t>
                                 <t t-elif="page_name == 'discuss'">Discuss</t>
                                 <t t-elif="page_name == 'support'">Help Desk</t>
                                 <t t-elif="page_name == 'settlement'">Settlement</t>
@@ -134,6 +143,21 @@
             <t t-elif="record.state == 'rejected'">Rejected</t>
             <t t-else=""><span t-esc="record.state"/></t>
         </span>
+    </template>
+
+    <template id="dsl_team_request_actions" name="DSL Team Request Actions">
+        <t t-if="record.state not in ('approved', 'rejected')">
+            <div class="dsl-inline-actions">
+                <form method="post" t-attf-action="/dsl/team/request/#{request_type}/#{record.id}/approve">
+                    <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                    <button class="dsl-mini-btn dsl-mini-approve" type="submit">Approve</button>
+                </form>
+                <form method="post" t-attf-action="/dsl/team/request/#{request_type}/#{record.id}/reject">
+                    <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                    <button class="dsl-mini-btn dsl-mini-reject" type="submit">Reject</button>
+                </form>
+            </div>
+        </t>
     </template>
 
     <template id="dsl_dashboard_page" name="DSL Dashboard">
@@ -451,6 +475,108 @@
                     <t t-if="not directory_rows">
                         <div class="dsl-muted-row">No employees found.</div>
                     </t>
+                </div>
+            </section>
+        </t>
+    </template>
+
+    <template id="dsl_team_page" name="DSL Team">
+        <t t-call="dsl_hr_portal.dsl_portal_layout">
+            <section class="dsl-panel">
+                <div class="dsl-panel-title">
+                    <h3>People Under You</h3>
+                </div>
+                <div class="dsl-directory-grid">
+                    <t t-foreach="team_employees" t-as="member">
+                        <article class="dsl-person-card">
+                            <div class="dsl-avatar"><t t-esc="member.name[:1]"/></div>
+                            <div>
+                                <h4 t-esc="member.name"/>
+                                <p>
+                                    <t t-if="member.job_id"><span t-esc="member.job_id.name"/></t>
+                                    <t t-else="">Employee</t>
+                                </p>
+                                <small>
+                                    <t t-if="member.department_id"><span t-esc="member.department_id.name"/></t>
+                                    <t t-if="member.work_email"> / <span t-esc="member.work_email"/></t>
+                                </small>
+                            </div>
+                        </article>
+                    </t>
+                    <t t-if="not team_employees">
+                        <div class="dsl-muted-row">No employees report to you in the current hierarchy.</div>
+                    </t>
+                </div>
+            </section>
+
+            <section class="dsl-dashboard-grid">
+                <div class="dsl-panel">
+                    <div class="dsl-panel-title"><h3>Team Leave</h3></div>
+                    <div class="dsl-list">
+                        <t t-foreach="team_leave_requests" t-as="record">
+                            <div class="dsl-list-row">
+                                <i class="fa fa-calendar"/>
+                                <span>
+                                    <strong><span t-esc="record.employee_id.name"/> / <span t-esc="record.date_from"/> to <span t-esc="record.date_to"/></strong>
+                                    <small><t t-call="dsl_hr_portal.dsl_status_badge"/></small>
+                                    <t t-set="request_type" t-value="'leave'"/>
+                                    <t t-call="dsl_hr_portal.dsl_team_request_actions"/>
+                                </span>
+                            </div>
+                        </t>
+                        <t t-if="not team_leave_requests"><div class="dsl-muted-row">No team leave requests.</div></t>
+                    </div>
+                </div>
+                <div class="dsl-panel">
+                    <div class="dsl-panel-title"><h3>Team Attendance Requests</h3></div>
+                    <div class="dsl-list">
+                        <t t-foreach="team_attendance_requests" t-as="record">
+                            <div class="dsl-list-row">
+                                <i class="fa fa-clock-o"/>
+                                <span>
+                                    <strong><span t-esc="record.employee_id.name"/> / <span t-esc="record.request_date"/></strong>
+                                    <small><t t-call="dsl_hr_portal.dsl_status_badge"/></small>
+                                    <t t-set="request_type" t-value="'attendance'"/>
+                                    <t t-call="dsl_hr_portal.dsl_team_request_actions"/>
+                                </span>
+                            </div>
+                        </t>
+                        <t t-if="not team_attendance_requests"><div class="dsl-muted-row">No team attendance requests.</div></t>
+                    </div>
+                </div>
+                <div class="dsl-panel">
+                    <div class="dsl-panel-title"><h3>Team Support</h3></div>
+                    <div class="dsl-list">
+                        <t t-foreach="team_support_tickets" t-as="record">
+                            <div class="dsl-list-row">
+                                <i class="fa fa-life-ring"/>
+                                <span>
+                                    <strong><span t-esc="record.employee_id.name"/> / <span t-esc="record.subject"/></strong>
+                                    <small><t t-call="dsl_hr_portal.dsl_status_badge"/></small>
+                                    <t t-set="request_type" t-value="'support'"/>
+                                    <t t-call="dsl_hr_portal.dsl_team_request_actions"/>
+                                </span>
+                            </div>
+                        </t>
+                        <t t-if="not team_support_tickets"><div class="dsl-muted-row">No team support tickets.</div></t>
+                    </div>
+                </div>
+                <div class="dsl-panel">
+                    <div class="dsl-panel-title"><h3>Team Settlement</h3></div>
+                    <div class="dsl-list">
+                        <t t-foreach="team_settlement_requests" t-as="record">
+                            <div class="dsl-list-row">
+                                <i class="fa fa-sign-out"/>
+                                <span>
+                                    <strong><span t-esc="record.employee_id.name"/> / <span t-esc="record.last_working_day"/></strong>
+                                    <small><t t-call="dsl_hr_portal.dsl_status_badge"/></small>
+                                    <t t-set="request_type" t-value="'settlement'"/>
+                                    <t t-call="dsl_hr_portal.dsl_team_request_actions"/>
+                                </span>
+                            </div>
+                        </t>
+                        <t t-if="not team_settlement_requests"><div class="dsl-muted-row">No team settlement requests.</div></t>
+                    </div>
                 </div>
             </section>
         </t>

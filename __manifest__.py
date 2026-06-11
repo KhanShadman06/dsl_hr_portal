@@ -24,6 +24,7 @@
         "security/dsl_hr_portal_security.xml",
         "security/ir.model.access.csv",
         "views/dsl_hr_portal_views.xml",
+        "views/dsl_hr_portal_user_wizard_views.xml",
         "views/hr_employee_views.xml",
         "views/dsl_hr_portal_menus.xml",
         "views/dsl_hr_portal_templates.xml",

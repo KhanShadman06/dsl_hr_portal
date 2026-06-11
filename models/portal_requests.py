@@ -106,7 +106,7 @@ class DslHrLeaveRequest(models.Model):
     date_to = fields.Date(required=True)
     day_count = fields.Integer(compute="_compute_day_count", store=True)
     reason = fields.Text(required=True)
-    attachment_count = fields.Integer(compute="_compute_attachment_count")
+    attachment_count = fields.Integer(string="Leave Attachments", compute="_compute_attachment_count")
 
     @api.depends("date_from", "date_to")
     def _compute_day_count(self):
@@ -173,18 +173,6 @@ class DslHrSupportTicket(models.Model):
         required=True,
     )
     description = fields.Text(required=True)
-    state = fields.Selection(
-        [
-            ("submitted", "New"),
-            ("under_review", "In Progress"),
-            ("approved", "Resolved"),
-            ("rejected", "Closed"),
-        ],
-        default="submitted",
-        required=True,
-        tracking=True,
-    )
-
     @api.model_create_multi
     def create(self, vals_list):
         sequence = self.env["ir.sequence"].sudo()

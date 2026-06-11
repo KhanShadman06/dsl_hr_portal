@@ -2,11 +2,17 @@
 <odoo>
     <menuitem id="menu_dsl_hr_portal_root"
               name="DSL HR Portal"
-              parent="hr.menu_hr_root"
               sequence="80"
               groups="hr.group_hr_user"/>
 
-    <menuitem id="menu_dsl_hr_attendance_requests"
+        <menuitem id="menu_dsl_hr_create_portal_user"
+              name="Portal User"
+              parent="menu_dsl_hr_portal_root"
+              action="action_dsl_hr_portal_users"
+              sequence="5"
+              groups="hr.group_hr_user"/>
+
+<menuitem id="menu_dsl_hr_attendance_requests"
               name="Manual Attendance"
               parent="menu_dsl_hr_portal_root"
               action="action_dsl_hr_attendance_requests"

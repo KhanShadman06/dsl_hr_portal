@@ -42,10 +42,13 @@ class DslHrPortal(CustomerPortal):
 
     def _base_values(self, page_name, employee=None):
         employee = employee or self._get_employee_record()
+        team_employees = self._visible_employees(employee, include_self=False) if employee else employee
         return {
             "page_name": page_name,
             "employee": employee,
             "employee_name": employee.name if employee else request.env.user.name,
+            "has_team": bool(team_employees),
+            "team_count": len(team_employees) if team_employees else 0,
         }
 
     def _parse_local_datetime(self, date_value, time_value):
@@ -102,6 +105,20 @@ class DslHrPortal(CustomerPortal):
     def _request_records(self, model_name, employee, limit=20):
         return request.env[model_name].sudo().search(
             [("employee_id", "=", employee.id)],
+            limit=limit,
+            order="submitted_on desc, id desc",
+        )
+
+    def _visible_employees(self, employee, include_self=True):
+        if "dsl_manager_user_ids" not in request.env["hr.employee"]._fields:
+            return employee.sudo()
+        return employee._dsl_get_hierarchy_employees(include_self=include_self)
+
+    def _team_request_records(self, model_name, employees, limit=20):
+        if not employees:
+            return request.env[model_name].sudo().browse()
+        return request.env[model_name].sudo().search(
+            [("employee_id", "in", employees.ids)],
             limit=limit,
             order="submitted_on desc, id desc",
         )
@@ -297,9 +314,12 @@ class DslHrPortal(CustomerPortal):
         employee = self._require_employee()
         if not getattr(employee, "id", False):
             return employee
+        if not self._visible_employees(employee, include_self=False):
+            return request.redirect("/dsl/dashboard")
 
         Employee = request.env["hr.employee"].sudo()
-        domain = []
+        visible_employees = self._visible_employees(employee)
+        domain = [("id", "in", visible_employees.ids)]
         if "active" in Employee._fields:
             domain.append(("active", "=", True))
         if q:
@@ -327,6 +347,67 @@ class DslHrPortal(CustomerPortal):
         values = self._base_values("directory", employee)
         values.update({"directory_rows": directory_rows, "search_query": q or ""})
         return request.render("dsl_hr_portal.dsl_directory_page", values)
+
+    @http.route("/dsl/team", type="http", auth="user", website=True)
+    def dsl_team(self, **kw):
+        employee = self._require_employee()
+        if not getattr(employee, "id", False):
+            return employee
+
+        team_employees = self._visible_employees(employee, include_self=False)
+        if not team_employees:
+            return request.redirect("/dsl/dashboard")
+        values = self._base_values("team", employee)
+        values.update(
+            {
+                "team_employees": team_employees,
+                "team_leave_requests": self._team_request_records("dsl.hr.leave.request", team_employees, 15),
+                "team_attendance_requests": self._team_request_records("dsl.hr.attendance.request", team_employees, 15),
+                "team_support_tickets": self._team_request_records("dsl.hr.support.ticket", team_employees, 15),
+                "team_settlement_requests": self._team_request_records("dsl.hr.settlement.request", team_employees, 10),
+            }
+        )
+        return request.render("dsl_hr_portal.dsl_team_page", values)
+
+    @http.route(
+        "/dsl/team/request/<string:request_type>/<int:record_id>/<string:action_name>",
+        type="http",
+        auth="user",
+        website=True,
+        methods=["POST"],
+    )
+    def dsl_team_request_action(self, request_type, record_id, action_name, **post):
+        model_map = {
+            "leave": "dsl.hr.leave.request",
+            "attendance": "dsl.hr.attendance.request",
+            "support": "dsl.hr.support.ticket",
+            "settlement": "dsl.hr.settlement.request",
+        }
+        if action_name not in ("review", "approve", "reject"):
+            return request.not_found()
+
+        employee = self._require_employee()
+        if not getattr(employee, "id", False):
+            return employee
+
+        team_employees = self._visible_employees(employee, include_self=False)
+        model_name = model_map.get(request_type)
+        if not model_name or not team_employees:
+            return request.not_found()
+
+        record = request.env[model_name].sudo().browse(record_id)
+        if not record.exists() or record.employee_id not in team_employees:
+            return request.not_found()
+
+        if record.state not in ("approved", "rejected"):
+            if action_name == "review":
+                record.action_mark_under_review()
+            elif action_name == "approve":
+                record.action_approve()
+            elif action_name == "reject":
+                record.action_reject()
+
+        return request.redirect("/dsl/team?updated=1")
 
     @http.route("/dsl/discuss", type="http", auth="user", website=True)
     def dsl_discuss(self, **kw):
