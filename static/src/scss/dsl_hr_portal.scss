@@ -579,9 +579,15 @@
     color: #7a5710;
 }
 
-.dsl-status-approved {
+.dsl-status-approved,
+.dsl-status-published {
     background: #e3f5ee;
     color: #176442;
+}
+
+.dsl-status-archived {
+    background: #edf1f4;
+    color: var(--dsl-ink-soft);
 }
 
 .dsl-status-rejected {
@@ -660,7 +666,12 @@
 }
 
 .dsl-mini-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
     min-height: 30px;
+    text-decoration: none;
     border: 0;
     border-radius: 6px;
     padding: 5px 10px;
@@ -672,6 +683,14 @@
 
 .dsl-mini-approve {
     background: var(--dsl-green);
+}
+
+.dsl-mini-view {
+    background: var(--dsl-ink);
+}
+
+.dsl-mini-download {
+    background: var(--dsl-blue);
 }
 
 .dsl-mini-reject {
@@ -747,6 +766,34 @@
 .dsl-att-status-absent {
     background: #edf1f4;
     color: var(--dsl-ink-soft);
+}
+
+.dsl-location-cell {
+    min-width: 160px;
+}
+
+.dsl-location-cell span,
+.dsl-location-cell small {
+    display: block;
+}
+
+.dsl-location-cell small {
+    margin-top: 2px;
+    color: var(--dsl-muted);
+    font-weight: 700;
+}
+
+.dsl-map-link {
+    display: inline-flex;
+    margin-top: 4px;
+    color: var(--dsl-blue);
+    font-size: 0.78rem;
+    font-weight: 800;
+    text-decoration: none;
+}
+
+.dsl-map-link:hover {
+    text-decoration: underline;
 }
 
 .dsl-count-pill {

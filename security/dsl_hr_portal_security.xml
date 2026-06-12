@@ -44,5 +44,17 @@
             <field name="perm_create" eval="False"/>
             <field name="perm_unlink" eval="False"/>
         </record>
+
+        <record id="rule_dsl_hr_payslip_document_portal_own" model="ir.rule">
+            <field name="name">Portal payslip documents: own published employee payslips</field>
+            <field name="model_id" ref="model_dsl_hr_payslip_document"/>
+            <field name="domain_force">['&amp;', ('state', '=', 'published'), '|', ('employee_id.user_id', '=', user.id), ('employee_id.work_contact_id', '=', user.partner_id.id)]</field>
+            <field name="groups" eval="[(4, ref('base.group_portal'))]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_unlink" eval="False"/>
+        </record>
+
     </data>
 </odoo>

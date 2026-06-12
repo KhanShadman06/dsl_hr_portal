@@ -16,13 +16,19 @@
                     </div>
                 </section>
                 <section class="dsl-login-panel">
-                    <form class="dsl-login-form" method="post" action="/web/login">
+                    <form class="dsl-login-form" method="post" action="/dsl/login">
                         <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
                         <input type="hidden" name="redirect" t-att-value="redirect"/>
                         <div class="dsl-form-header">
                             <span class="dsl-kicker">Secure access</span>
                             <h2>Sign in</h2>
                         </div>
+                        <t t-if="error">
+                            <div class="dsl-login-error">
+                                <i class="fa fa-exclamation-circle"/>
+                                <span t-esc="error"/>
+                            </div>
+                        </t>
                         <label class="dsl-field">
                             <span>Email</span>
                             <input type="text" name="login" autocomplete="username" required="required"/>
@@ -73,6 +79,12 @@
                             <i class="fa fa-calendar"/>
                             <span>Leave</span>
                         </a>
+                        <t t-if="has_employee">
+                            <a t-attf-class="dsl-nav-link #{'is-active' if page_name == 'payslips' else ''}" href="/dsl/payslips">
+                                <i class="fa fa-file-pdf-o"/>
+                                <span>Pay Slips</span>
+                            </a>
+                        </t>
                         <t t-if="has_team or is_hr_user">
                             <a t-attf-class="dsl-nav-link #{'is-active' if page_name == 'directory' else ''}" href="/dsl/directory">
                                 <i class="fa fa-users"/>
@@ -107,6 +119,7 @@
                                 <t t-if="page_name == 'dashboard'">Dashboard</t>
                                 <t t-elif="page_name == 'attendance'">Attendance</t>
                                 <t t-elif="page_name == 'leave'">Leave &amp; Holidays</t>
+                                <t t-elif="page_name == 'payslips'">Pay Slips</t>
                                 <t t-elif="page_name == 'directory'">Employee Connect</t>
                                 <t t-elif="page_name == 'team'">My Team</t>
                                 <t t-elif="page_name == 'discuss'">Discuss</t>
@@ -142,6 +155,8 @@
             <t t-elif="record.state == 'submitted'">Submitted</t>
             <t t-elif="record.state == 'under_review'">Under Review</t>
             <t t-elif="record.state == 'approved'">Approved</t>
+            <t t-elif="record.state == 'published'">Published</t>
+            <t t-elif="record.state == 'archived'">Archived</t>
             <t t-elif="record.state == 'rejected'">Rejected</t>
             <t t-else=""><span t-esc="record.state"/></t>
         </span>
@@ -385,6 +400,7 @@
                                 <th>Date</th>
                                 <th>Check In</th>
                                 <th>Check Out</th>
+                                <th>Location</th>
                                 <th>Status</th>
                             </tr>
                         </thead>
@@ -402,13 +418,21 @@
                                         <t t-elif="row.get('attendance')">Open</t>
                                         <t t-else="">-</t>
                                     </td>
+                                    <td class="dsl-location-cell">
+                                        <t t-if="row.get('location')">
+                                            <span t-esc="row['location']['label']"/>
+                                            <small t-if="row['location'].get('detail') and row['location']['detail'] != row['location']['label']" t-esc="row['location']['detail']"/>
+                                            <a t-if="row['location'].get('map_url')" class="dsl-map-link" t-att-href="row['location']['map_url']" target="_blank" rel="noopener">Map</a>
+                                        </t>
+                                        <t t-else="">-</t>
+                                    </td>
                                     <td>
                                         <span t-attf-class="dsl-att-status dsl-att-status-#{row['status_class']}" t-esc="row['status_label']"/>
                                     </td>
                                 </tr>
                             </t>
                             <t t-if="not attendance_overview['overview_rows']">
-                                <tr><td colspan="5">No employees found.</td></tr>
+                                <tr><td colspan="6">No employees found.</td></tr>
                             </t>
                         </tbody>
                     </table>
@@ -962,4 +986,57 @@
             </section>
         </t>
     </template>
+
+    <template id="dsl_payslips_page" name="DSL Pay Slips">
+        <t t-call="dsl_hr_portal.dsl_portal_layout">
+            <section class="dsl-panel">
+                <div class="dsl-panel-title">
+                    <h3>Pay Slip History</h3>
+                </div>
+                <t t-if="payslip_documents">
+                    <table class="dsl-table">
+                        <thead>
+                            <tr>
+                                <th>Period</th>
+                                <th>Issue Date</th>
+                                <th>File</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <t t-foreach="payslip_documents" t-as="record">
+                                <tr>
+                                    <td><strong t-esc="record.period_label"/></td>
+                                    <td><span t-esc="record.issue_date"/></td>
+                                    <td><span t-esc="record.pdf_filename or record.name"/></td>
+                                    <td><t t-call="dsl_hr_portal.dsl_status_badge"/></td>
+                                    <td>
+                                        <div class="dsl-inline-actions">
+                                            <a class="dsl-mini-btn dsl-mini-view" t-attf-href="/dsl/payslips/#{record.id}/pdf" target="_blank" rel="noopener">
+                                                <i class="fa fa-print"/>
+                                                <span>Print</span>
+                                            </a>
+                                            <a class="dsl-mini-btn dsl-mini-download" t-attf-href="/dsl/payslips/#{record.id}/pdf?download=1">
+                                                <i class="fa fa-download"/>
+                                                <span>Download</span>
+                                            </a>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </t>
+                        </tbody>
+                    </table>
+                </t>
+                <t t-else="">
+                    <section class="dsl-empty-state">
+                        <i class="fa fa-file-pdf-o"/>
+                        <h2>No pay slips published</h2>
+                        <p>Published pay slips will appear here once HR uploads them.</p>
+                    </section>
+                </t>
+            </section>
+        </t>
+    </template>
+
 </odoo>

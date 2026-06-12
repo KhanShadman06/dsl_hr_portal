@@ -9,3 +9,5 @@ access_dsl_hr_support_ticket_portal,dsl.hr.support.ticket.portal,model_dsl_hr_su
 access_dsl_hr_support_ticket_hr,dsl.hr.support.ticket.hr,model_dsl_hr_support_ticket,hr.group_hr_user,1,1,1,1
 access_dsl_hr_portal_user_wizard_hr,dsl.hr.portal.user.wizard.hr,model_dsl_hr_portal_user_wizard,hr.group_hr_user,1,1,1,1
 access_dsl_hr_company_day_hr,dsl.hr.company.day.hr,model_dsl_hr_company_day,hr.group_hr_user,1,1,1,1
+access_dsl_hr_payslip_document_portal,dsl.hr.payslip.document.portal,model_dsl_hr_payslip_document,base.group_portal,1,0,0,0
+access_dsl_hr_payslip_document_hr,dsl.hr.payslip.document.hr,model_dsl_hr_payslip_document,hr.group_hr_user,1,1,1,1

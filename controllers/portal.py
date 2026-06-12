@@ -8,8 +8,9 @@ import pytz
 from markupsafe import Markup, escape
 
 from odoo import fields, http
-from odoo.exceptions import ValidationError
+from odoo.exceptions import AccessDenied, ValidationError
 from odoo.addons.portal.controllers.portal import CustomerPortal
+from odoo.addons.web.controllers.utils import _get_login_redirect_url
 from odoo.http import request
 
 
@@ -138,6 +139,46 @@ class DslHrPortal(CustomerPortal):
             status=status,
         )
 
+
+    def _attendance_location_display(self, attendance):
+        if not attendance:
+            return False
+
+        def field_value(field_name):
+            if field_name in attendance._fields:
+                return attendance[field_name]
+            return False
+
+        latitude = field_value("in_latitude")
+        longitude = field_value("in_longitude")
+        city = field_value("in_city")
+        country = field_value("in_country_name")
+        ip_address = field_value("in_ip_address")
+
+        label_parts = [part for part in [city, country] if part]
+        label = ", ".join(label_parts)
+        detail = ""
+        map_url = ""
+
+        if latitude and longitude:
+            lat_text = "%.5f" % latitude
+            lon_text = "%.5f" % longitude
+            detail = "%s, %s" % (lat_text, lon_text)
+            map_url = "https://www.google.com/maps/search/?api=1&query=%s,%s" % (latitude, longitude)
+            if not label:
+                label = detail
+        elif ip_address:
+            label = label or "IP %s" % ip_address
+
+        if not label:
+            return False
+
+        return {
+            "label": label,
+            "detail": detail,
+            "map_url": map_url,
+        }
+
     def _attendance_location_values(self, Attendance, prefix, latitude, longitude):
         vals = {}
         field_map = {
@@ -261,6 +302,7 @@ class DslHrPortal(CustomerPortal):
                 "department": employee.department_id.name if employee.department_id else "",
                 "job_title": employee.job_id.name if employee.job_id else "",
                 "attendance": last_attendance.get(employee.id),
+                "location": self._attendance_location_display(last_attendance.get(employee.id)),
                 "leave": leave_by_employee.get(employee.id),
                 "company_days": employee_days,
             }
@@ -306,6 +348,16 @@ class DslHrPortal(CustomerPortal):
             [("employee_id", "=", employee.id)],
             limit=limit,
             order="submitted_on desc, id desc",
+        )
+
+
+    def _payslip_records(self, employee, limit=40):
+        if not employee:
+            return request.env["dsl.hr.payslip.document"].sudo().browse()
+        return request.env["dsl.hr.payslip.document"].sudo().search(
+            [("employee_id", "=", employee.id), ("state", "=", "published")],
+            limit=limit,
+            order="period_year desc, period_month desc, issue_date desc, id desc",
         )
 
     def _team_request_records(self, model_name, employees, limit=20, pending_only=False):
@@ -429,14 +481,33 @@ class DslHrPortal(CustomerPortal):
         lines = (body or "").strip().splitlines()
         return Markup("<br/>").join(escape(line) for line in lines)
 
-    @http.route("/dsl/login", type="http", auth="public", website=True)
+    @http.route("/dsl/login", type="http", auth="public", website=True, methods=["GET", "POST"])
     def dsl_login(self, **kw):
+        redirect = kw.get("redirect") or "/dsl/dashboard"
         if not request.env.user._is_public():
-            return request.redirect("/dsl/dashboard")
+            return request.redirect(_get_login_redirect_url(request.env.uid, redirect), 303)
+
+        error = None
+        if kw.get("error"):
+            error = "Unable to sign in. Please try again."
+
+        if request.httprequest.method == "POST":
+            try:
+                uid = request.session.authenticate(
+                    request.db,
+                    request.params.get("login"),
+                    request.params.get("password"),
+                )
+                request.params["login_success"] = True
+                return request.redirect(_get_login_redirect_url(uid, redirect), 303)
+            except AccessDenied:
+                error = "Wrong email or password."
+
         return request.render(
             "dsl_hr_portal.dsl_login_page",
             {
-                "redirect": kw.get("redirect") or "/dsl/dashboard",
+                "redirect": redirect,
+                "error": error,
             },
         )
 
@@ -653,6 +724,45 @@ class DslHrPortal(CustomerPortal):
         except Exception:
             return request.redirect("/dsl/leave?error=request")
         return request.redirect("/dsl/leave?submitted=1")
+
+
+    @http.route("/dsl/payslips", type="http", auth="user", website=True)
+    def dsl_payslips(self, **kw):
+        employee = self._require_employee()
+        if not getattr(employee, "id", False):
+            return employee
+        values = self._base_values("payslips", employee)
+        values["payslip_documents"] = self._payslip_records(employee, limit=80)
+        return request.render("dsl_hr_portal.dsl_payslips_page", values)
+
+    @http.route("/dsl/payslips/<int:document_id>/pdf", type="http", auth="user", website=True)
+    def dsl_payslip_pdf(self, document_id, **kw):
+        document = request.env["dsl.hr.payslip.document"].sudo().browse(document_id).exists()
+        if not document or document.state != "published" or not document.pdf_file:
+            return request.not_found()
+
+        employee = self._get_employee_record()
+        owns_document = bool(employee and document.employee_id.id == employee.id)
+        if not owns_document and not self._is_hr_user():
+            return request.not_found()
+
+        try:
+            content = base64.b64decode(document.pdf_file)
+        except Exception:
+            return request.not_found()
+
+        disposition = "attachment" if kw.get("download") else "inline"
+        filename = document._pdf_download_filename()
+        return request.make_response(
+            content,
+            headers=[
+                ("Content-Type", "application/pdf"),
+                ("Content-Length", str(len(content))),
+                ("Content-Disposition", '%s; filename="%s"' % (disposition, filename)),
+                ("Cache-Control", "private, no-store, max-age=0"),
+                ("X-Content-Type-Options", "nosniff"),
+            ],
+        )
 
     @http.route("/dsl/directory", type="http", auth="user", website=True)
     def dsl_directory(self, q=None, **kw):

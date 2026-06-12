@@ -276,4 +276,70 @@
         <field name="view_mode">tree,form</field>
     </record>
 
+
+    <record id="view_dsl_hr_payslip_document_tree" model="ir.ui.view">
+        <field name="name">dsl.hr.payslip.document.tree</field>
+        <field name="model">dsl.hr.payslip.document</field>
+        <field name="arch" type="xml">
+            <tree string="Pay Slips">
+                <field name="name"/>
+                <field name="employee_id"/>
+                <field name="period_label"/>
+                <field name="issue_date"/>
+                <field name="state"/>
+                <field name="uploaded_by"/>
+                <field name="published_on"/>
+            </tree>
+        </field>
+    </record>
+
+    <record id="view_dsl_hr_payslip_document_form" model="ir.ui.view">
+        <field name="name">dsl.hr.payslip.document.form</field>
+        <field name="model">dsl.hr.payslip.document</field>
+        <field name="arch" type="xml">
+            <form string="Pay Slip">
+                <header>
+                    <button name="action_publish" type="object" string="Publish" class="btn-primary" invisible="state == 'published'"/>
+                    <button name="action_set_draft" type="object" string="Set Draft" class="btn-secondary" invisible="state == 'draft'"/>
+                    <button name="action_archive_document" type="object" string="Archive" class="btn-secondary" invisible="state == 'archived'"/>
+                    <field name="state" widget="statusbar" statusbar_visible="draft,published,archived"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <label for="name"/>
+                        <h1><field name="name" readonly="1"/></h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="employee_id"/>
+                            <field name="period_month"/>
+                            <field name="period_year"/>
+                            <field name="issue_date"/>
+                        </group>
+                        <group>
+                            <field name="company_id" readonly="1"/>
+                            <field name="uploaded_by" readonly="1"/>
+                            <field name="uploaded_on" readonly="1"/>
+                            <field name="published_on" readonly="1"/>
+                        </group>
+                    </group>
+                    <group>
+                        <field name="pdf_filename" invisible="1"/>
+                        <field name="pdf_file" filename="pdf_filename" widget="binary"/>
+                    </group>
+                    <group>
+                        <field name="note"/>
+                    </group>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_dsl_hr_payslip_documents" model="ir.actions.act_window">
+        <field name="name">Pay Slips</field>
+        <field name="res_model">dsl.hr.payslip.document</field>
+        <field name="view_mode">tree,form</field>
+    </record>
+
 </odoo>

@@ -33,6 +33,15 @@
               sequence="20"
               groups="hr.group_hr_user"/>
 
+
+
+    <menuitem id="menu_dsl_hr_payslip_documents"
+              name="Pay Slips"
+              parent="menu_dsl_hr_portal_root"
+              action="action_dsl_hr_payslip_documents"
+              sequence="25"
+              groups="hr.group_hr_user"/>
+
     <menuitem id="menu_dsl_hr_support_tickets"
               name="Help Desk"
               parent="menu_dsl_hr_portal_root"
