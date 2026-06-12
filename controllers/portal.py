@@ -890,8 +890,10 @@ class DslHrPortal(CustomerPortal):
             return request.redirect("/dsl/settlement?error=settlement")
         return request.redirect("/dsl/settlement?submitted=1")
 
-    @http.route(["/my", "/my/home"], type="http", auth="user", website=True)
+    @http.route(["/my", "/my/home"], type="http", auth="public", website=True)
     def home(self, **kw):
+        if request.env.user._is_public():
+            return request.redirect("/dsl/login")
         if self._get_employee_record() or self._is_hr_user():
             return request.redirect("/dsl/dashboard")
         return super().home(**kw)
